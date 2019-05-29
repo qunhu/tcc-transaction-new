@@ -27,12 +27,14 @@ public class Terminator implements Serializable {
 
             try {
 
+                //从spring容器中获取对应事务参与者实现
                 Object target = FactoryBuilder.factoryOf(invocationContext.getTargetClass()).getInstance();
 
                 Method method = null;
 
+                //获取对应方法反射对象
                 method = target.getClass().getMethod(invocationContext.getMethodName(), invocationContext.getParameterTypes());
-
+                //设置上下文
                 FactoryBuilder.factoryOf(transactionContextEditorClass).getInstance().set(transactionContext, target, method, invocationContext.getArgs());
 
                 return method.invoke(target, invocationContext.getArgs());

@@ -25,8 +25,10 @@ public class TransactionRecovery {
 
     public void startRecover() {
 
+        //获取所有没被处理的transaction
         List<Transaction> transactions = loadErrorTransactions();
 
+        //根据规则处理这些transaction
         recoverErrorTransactions(transactions);
     }
 
@@ -38,6 +40,7 @@ public class TransactionRecovery {
         TransactionRepository transactionRepository = transactionConfigurator.getTransactionRepository();
         RecoverConfig recoverConfig = transactionConfigurator.getRecoverConfig();
 
+        //获取在RecoverDuration间隔之前未完成的transaction
         return transactionRepository.findAllUnmodifiedSince(new Date(currentTimeInMillis - recoverConfig.getRecoverDuration() * 1000));
     }
 
@@ -46,11 +49,13 @@ public class TransactionRecovery {
 
         for (Transaction transaction : transactions) {
 
+            //重试次数超过上限的Transaction不再执行补偿
             if (transaction.getRetriedCount() > transactionConfigurator.getRecoverConfig().getMaxRetryCount()) {
 
                 logger.error(String.format("recover failed with max retry count,will not try again. txid:%s, status:%s,retried count:%d,transaction content:%s", transaction.getXid(), transaction.getStatus().getId(), transaction.getRetriedCount(), JSON.toJSONString(transaction)));
                 continue;
             }
+            //如果是分支事务，并且超过最长超时时间忽略
 
             if (transaction.getTransactionType().equals(TransactionType.BRANCH)
                     && (transaction.getCreateTime().getTime() +
@@ -70,11 +75,15 @@ public class TransactionRecovery {
                     transaction.commit();
                     transactionConfigurator.getTransactionRepository().delete(transaction);
 
-                } else if (transaction.getStatus().equals(TransactionStatus.CANCELLING)
+
+                }
+                // trying阶段不会重试，失败未处理，会触发canceling操作
+                else if (transaction.getStatus().equals(TransactionStatus.CANCELLING)
                         || transaction.getTransactionType().equals(TransactionType.ROOT)) {
 
                     transaction.changeStatus(TransactionStatus.CANCELLING);
                     transactionConfigurator.getTransactionRepository().update(transaction);
+
                     transaction.rollback();
                     transactionConfigurator.getTransactionRepository().delete(transaction);
                 }

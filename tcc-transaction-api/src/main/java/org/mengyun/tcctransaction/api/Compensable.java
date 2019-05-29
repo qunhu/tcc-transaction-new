@@ -38,6 +38,9 @@ public @interface Compensable {
         }
     }
 
+    /**
+     * DefaultTransactionContextEditor从方法参数里面提取TransactionContext对象
+     */
     class DefaultTransactionContextEditor implements TransactionContextEditor {
 
         @Override

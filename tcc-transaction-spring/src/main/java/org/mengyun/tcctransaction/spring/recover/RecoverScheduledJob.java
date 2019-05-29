@@ -23,6 +23,7 @@ public class RecoverScheduledJob {
         try {
             MethodInvokingJobDetailFactoryBean jobDetail = new MethodInvokingJobDetailFactoryBean();
             jobDetail.setTargetObject(transactionRecovery);
+            //设置定时任务执行的对象和方法
             jobDetail.setTargetMethod("startRecover");
             jobDetail.setName("transactionRecoveryJob");
             jobDetail.setConcurrent(false);
@@ -30,6 +31,7 @@ public class RecoverScheduledJob {
 
             CronTriggerFactoryBean cronTrigger = new CronTriggerFactoryBean();
             cronTrigger.setBeanName("transactionRecoveryCronTrigger");
+            //设置cron表达式
             cronTrigger.setCronExpression(transactionConfigurator.getRecoverConfig().getCronExpression());
             cronTrigger.setJobDetail(jobDetail.getObject());
             cronTrigger.afterPropertiesSet();

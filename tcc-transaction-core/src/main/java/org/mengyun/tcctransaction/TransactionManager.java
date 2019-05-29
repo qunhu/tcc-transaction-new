@@ -12,14 +12,23 @@ import java.util.concurrent.ExecutorService;
 /**
  * Created by changmingxie on 10/26/15.
  */
-public class TransactionManager {
+public class  TransactionManager {
 
     static final Logger logger = Logger.getLogger(TransactionManager.class.getSimpleName());
 
+    /**
+     * TransactionRepository用于对Transaction的持久化操作，如果是JDBC实现，其实就是对一张Transaction表的CRUD，这张表主要用于补偿任务
+     */
     private TransactionRepository transactionRepository;
 
+    /**
+     * 这是一个双向队列，在这个类主要用作栈，用来处理事务的嵌套，因为是ThreadLocal，所以针对每个线程都是独立的
+     */
     private static final ThreadLocal<Deque<Transaction>> CURRENT = new ThreadLocal<Deque<Transaction>>();
 
+    /**
+     * 线程池，用于异步执行commit或者cancel
+     */
     private ExecutorService executorService;
 
     public void setTransactionRepository(TransactionRepository transactionRepository) {
@@ -41,6 +50,11 @@ public class TransactionManager {
         return transaction;
     }
 
+    /**
+     * 这个方法用于从主事务的上下文创建分支事务，xid保持不变，事务类型变化
+     * @param transactionContext
+     * @return
+     */
     public Transaction propagationNewBegin(TransactionContext transactionContext) {
 
         Transaction transaction = new Transaction(transactionContext);
@@ -50,6 +64,12 @@ public class TransactionManager {
         return transaction;
     }
 
+    /**
+     * 这个方法用于从事务上下文同步事务状态到ThreadLocal
+     * @param transactionContext
+     * @return
+     * @throws NoExistedTransactionException
+     */
     public Transaction propagationExistBegin(TransactionContext transactionContext) throws NoExistedTransactionException {
         Transaction transaction = transactionRepository.findByXid(transactionContext.getXid());
 
@@ -120,7 +140,9 @@ public class TransactionManager {
 
     private void commitTransaction(Transaction transaction) {
         try {
+            //调用事务参与者的提交方法
             transaction.commit();
+            //事务结束，在数据库删除当前事务，如果commit异常，不会把数据库内事务记录删除，为了重试补偿
             transactionRepository.delete(transaction);
         } catch (Throwable commitException) {
             logger.warn("compensable transaction confirm failed, recovery job will try to confirm later.", commitException);
@@ -160,6 +182,10 @@ public class TransactionManager {
         CURRENT.get().push(transaction);
     }
 
+    /**
+     * 事务结束，从栈中弹出结束的事务。
+     * @param transaction
+     */
     public void cleanAfterCompletion(Transaction transaction) {
         if (isTransactionActive() && transaction != null) {
             Transaction currentTransaction = getCurrentTransaction();
